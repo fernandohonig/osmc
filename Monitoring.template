@@ -1,0 +1,381 @@
+{
+ "AWSTemplateFormatVersion" : "2010-09-09",
+ "Description" : "Monitoring deployment including mklive status, nagios, nagios plugins and RESTlos for enabling REST api to create hosts.",
+ 
+	"Parameters" : {
+		"KeyName" : {
+		  "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+		  "Type" : "String",
+		  "MinLength": "1",
+		  "MaxLength": "64",
+		  "AllowedPattern" : "[-_ a-zA-Z0-9]*",
+		  "Default" : "east_prd",
+		  "ConstraintDescription" : "can contain only alphanumeric characters, spaces, dashes and underscores."
+		},
+		"VPCId" : {
+		  "Description" : "ID of the main VPC",
+		  "Type" : "String",
+		  "MinLength": "1",
+		  "MaxLength": "16",
+		  "Default" : "vpc-512d103e",
+		  "ConstraintDescription" : "can contain only alphanumeric characters."
+		},	
+		"VPNInstanceIP" : {
+		  "Description" : "IP address for this backend web server.",
+		  "Type" : "String",
+		  "Default" : "172.16.0.250"
+		},
+		"DefaultRoute" : {
+		  "Description" : "IP address for this backend web server.",
+		  "Type" : "String",
+		  "Default" : "172.16.0.250"
+		},					
+		"VPCSGId" : {
+		  "Description" : "ID of the VPC Security Group",
+		  "Type" : "String",
+		  "MinLength": "1",
+		  "MaxLength": "16",
+		  "Default" : "sg-a12bf8ce",
+		  "ConstraintDescription" : "can contain only alphanumeric characters."
+		},	
+		"MonitInstanceType" : {
+		  "Description" : "Instance type for monitoring server instance.",
+		  "Type" : "String",
+		  "Default" : "m1.large"
+		},
+		"MONAZs" : {
+		  "Description" : "Instance type for monitoring server instance.",
+		  "Type" : "String",
+		  "Default" : "monaz"
+		},		
+		"InstanceHostType" : {
+		  "Description" : "IP address for this backend web server.",
+		  "Type" : "String",
+		  "Default" : "linux-servers, nagios-servers"
+		},
+		"PublicSubnet" : {
+		  "Description" : "ID of the Public Subnet",
+		  "Type" : "String",
+		  "MinLength": "1",
+		  "MaxLength": "16",
+		  "Default" : "subnet-c52d10aa",
+		  "ConstraintDescription" : "can contain only alphanumeric characters."
+		}
+	  },
+
+	"Mappings" : {
+		"AWSInstanceType2Arch" : {
+		  "t1.micro"    : { "Arch" : "64" },
+		  "m1.small"    : { "Arch" : "64" },
+		  "m1.medium"   : { "Arch" : "64" },	  
+		  "m1.large"    : { "Arch" : "64" },
+		  "m1.xlarge"   : { "Arch" : "64" },
+		  "m2.xlarge"   : { "Arch" : "64" },
+		  "m2.2xlarge"  : { "Arch" : "64" },
+		  "m2.4xlarge"  : { "Arch" : "64" },
+		  "c1.medium"   : { "Arch" : "64" },
+		  "c1.xlarge"   : { "Arch" : "64" },
+		  "cc1.4xlarge" : { "Arch" : "64Cluster" },
+		  "cc2.8xlarge" : { "Arch" : "64Cluster" },
+		  "cg1.4xlarge" : { "Arch" : "64GPU" }
+		},
+
+		"AWSRegionArch2AMI" : {
+		  "us-east-1"      : { "32" : "ami-a0cd60c9", "64" : "ami-41482a28", "64Cluster" : "ami-a8cd60c1", "64GPU" : "NOT_YET_SUPPORTED"},
+		  "us-west-2"      : { "32" : "ami-46da5576", "64" : "ami-d9df49e9", "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED"},      
+		  "eu-west-1"      : { "32" : "ami-61555115", "64" : "ami-6d555119", "64Cluster" : "ami-67555113",      "64GPU" : "NOT_YET_SUPPORTED" }
+		},
+		
+		"AWSInstanceType2Ubuntu" : {
+		  "t1.micro"    : { "Arch" : "64" },
+		  "m1.small"    : { "Arch" : "64" },
+		  "m1.medium"   : { "Arch" : "64" },	  
+		  "m1.large"    : { "Arch" : "64" },
+		  "m1.xlarge"   : { "Arch" : "64" },
+		  "m2.xlarge"   : { "Arch" : "64" },
+		  "m2.2xlarge"  : { "Arch" : "64" },
+		  "m2.4xlarge"  : { "Arch" : "64" },
+		  "c1.medium"   : { "Arch" : "64" },
+		  "c1.xlarge"   : { "Arch" : "64" },
+		  "cc1.4xlarge" : { "Arch" : "64Cluster" },
+		  "cc2.8xlarge" : { "Arch" : "64Cluster" },
+		  "cg1.4xlarge" : { "Arch" : "64GPU" }
+		},
+
+		"AWSRegionUbuntu2AMI" : {
+		  "us-east-1"      : { "32" : "ami-a0cd60c9", "64" : "ami-3fec7956" , "64Cluster" : "ami-a8cd60c1", "64GPU" : "NOT_YET_SUPPORTED"},
+		  "us-west-2"      : { "32" : "ami-46da5576", "64" : "ami-4ac9437a" , "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED"},
+		  "us-west-1"      : { "32" : "ami-7d4c6938", "64" : "ami-fe002cbb", "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED" },
+		  "eu-west-1"      : { "32" : "ami-61555115", "64" : "ami-6d555119", "64Cluster" : "ami-67555113",      "64GPU" : "NOT_YET_SUPPORTED" }
+		},
+	  
+		 "AWSInstanceType2Win" : {
+		  "t1.micro"    : { "Arch" : "64" },
+		  "m1.small"    : { "Arch" : "64" },
+		  "m1.medium"   : { "Arch" : "64" },	  
+		  "m1.large"    : { "Arch" : "64" },
+		  "m1.xlarge"   : { "Arch" : "64" },
+		  "m2.xlarge"   : { "Arch" : "64" },
+		  "m2.2xlarge"  : { "Arch" : "64" },
+		  "m2.4xlarge"  : { "Arch" : "64" },
+		  "c1.medium"   : { "Arch" : "64" },
+		  "c1.xlarge"   : { "Arch" : "64" },
+		  "cc1.4xlarge" : { "Arch" : "64Cluster" },
+		  "cc2.8xlarge" : { "Arch" : "64Cluster" },
+		  "cg1.4xlarge" : { "Arch" : "64GPU" }
+		},
+
+		"AWSRegionWin2AMI" : {
+		  "us-east-1"      : { "32" : "ami-a0cd60c9", "64" : "ami-2282e34b" , "64Cluster" : "ami-a8cd60c1", "64GPU" : "NOT_YET_SUPPORTED"},
+		  "us-west-2"      : { "32" : "ami-46da5576", "64" : "ami-8854c3b8" , "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED"},
+		  "us-west-1"      : { "32" : "ami-7d4c6938", "64" : "ami-734c6936", "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED" }
+		}	
+	  },
+
+	"Resources" : {
+
+		"MonitoringELB" : {
+		   "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+		   "Properties" : {
+			  "Subnets" : [ { "Ref" : "PublicSubnet" } ],
+			  "LBCookieStickinessPolicy" : [
+			  {
+			  "PolicyName" : "LoadBalancerPolicy",
+			  "CookieExpirationPeriod" : ""
+				} ],
+			  "SecurityGroups" : [ {"Ref" : "VPCSGId"} ],
+			  "Listeners" : [ {
+				 "LoadBalancerPort" : "80",
+				 "InstancePort" : "80",			 
+				 "Protocol" : "HTTP"
+			  },
+				{
+				 "LoadBalancerPort" : "6557",
+				 "InstancePort" : "6557",			 
+				 "Protocol" : "TCP"
+			  }	],
+			  "HealthCheck" : {
+				 "Target" : {
+					"Fn::Join" : [ "", [ "TCP:", "80", "" ] ]
+				 },
+				 "HealthyThreshold" : "3",
+				 "UnhealthyThreshold" : "2",
+				 "Interval" : "10",
+				 "Timeout" : "5"
+				}
+			}
+		},  
+	
+		"MonitoringLayerSG" : {
+		  "Type" : "AWS::EC2::SecurityGroup",
+		  "Properties" : {
+			"GroupDescription" : "Enable Access to DB Layer",
+			"VpcId" : { "Ref" : "VPCId" },
+			"SecurityGroupIngress" : [           
+			   { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22", "SourceSecurityGroupId" : { "Ref" : "VPCSGId" } },
+			   { "IpProtocol" : "tcp", "FromPort" : "5666",  "ToPort" : "5666", "SourceSecurityGroupId" : { "Ref" : "VPCSGId" } },
+			   { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80", "SourceSecurityGroupId" : { "Ref" : "VPCSGId" } },
+			   { "IpProtocol" : "tcp", "FromPort" : "6557",  "ToPort" : "6557", "SourceSecurityGroupId" : { "Ref" : "VPCSGId" } }
+			   ],
+			"SecurityGroupEgress" : [
+			   { "IpProtocol" : "-1", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0" } 
+			   ]
+		  }
+		},
+		"VPCSecurityGroupIngressMonLayer2VPC" : {
+			"Type" : "AWS::EC2::SecurityGroupIngress",
+			"Properties" : {
+				"GroupId" : { "Ref" : "VPCSGId" },			
+				"IpProtocol" : "-1", "FromPort" : "0",  "ToPort" : "65535",  "SourceSecurityGroupId" : { "Ref" : "MonitoringLayerSG" }
+			},
+			"DependsOn" : "MonitoringLayerSG"
+		},	
+		"MonitoringASG" : {
+		   "Type" : "AWS::AutoScaling::AutoScalingGroup",
+		   "Version": "2009-05-15",		   
+		   "Properties" : {
+			  "AvailabilityZones" : [ { "Ref" : "MONAZs" } ],		  
+			  "LaunchConfigurationName" : { "Ref" : "MonitoringLaunchConfig" },
+			  "MinSize" : "1",
+			  "MaxSize" : "1",
+			  "DesiredCapacity" : "1",
+			  "LoadBalancerNames" : [ { "Ref" : "MonitoringELB" } ],
+			  "VPCZoneIdentifier" : [ { "Ref" : "PublicSubnet" } ]
+			}
+		},  
+  
+		"MonitoringLaunchConfig" : {
+		   "Type" : "AWS::AutoScaling::LaunchConfiguration",
+		   "Properties" : {
+			  "KeyName" : { "Ref" : "KeyName" },
+			  "ImageId"        : { "Fn::FindInMap" : [ "AWSRegionUbuntu2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Ubuntu", { "Ref" : "MonitInstanceType" }, "Arch" ] } ] },
+			  "SecurityGroups" : [ { "Ref" : "MonitoringLayerSG" } ],			  
+			  "InstanceType" : { "Ref" : "MonitInstanceType" },
+			  "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+				"#!/bin/bash -v\n",
+				"sed -i '$iroute add default gw " ,{ "Ref" : "VPNInstanceIP" } ,"' /etc/rc.local\n",	
+				"sed -i '$iroute del default gw " ,{ "Ref" : "DefaultRoute" } ,"' /etc/rc.local\n",
+				"sh /etc/rc.local\n",
+				"apt-get update -y;\n",
+				"debconf-set-selections <<< 'postfix postfix/main_mailer_type select Internet Site'\n",
+				"debconf-set-selections <<< 'postfix postfix/mailname string localhost'\n",
+				"apt-get install nmap python-dev python-pip git libapache2-mod-wsgi make apache2 libapache2-mod-php5 build-essential php5 libgd-graph-perl postfix libgd2-xpm-dev mailutils unzip iwatch xinetd liblocal-lib-perl cpanminus nagios-nrpe-server snmpd python-pymongo s3cmd dos2unix -y\n",
+				"cd /etc/iwatch/; rm /etc/iwatch/iwatch.xml; wget https://s3.amazonaws.com/{$someplace}/iwatch.xml\n",
+				"sed -i 's/false/true/g' /etc/default/iwatch\n",
+				"cd /etc/snmp/; rm snmpd.conf; wget https://s3.amazonaws.com/{$someplace}/snmpd.conf; service snmpd restart\n",						
+				"pip install pynag Flask sqlalchemy\n",
+				"/usr/sbin/useradd -m -s /bin/bash nagios\n",
+				"/usr/sbin/groupadd nagios\n",
+				"/usr/sbin/groupadd nagcmd\n",
+				"/usr/sbin/usermod -G nagcmd nagios\n",
+				"/usr/sbin/usermod -G nagcmd www-data\n",
+				"cd /; wget 'http://downloads.sourceforge.net/project/nagios/nagios-3.x/nagios-3.5.0/nagios-3.5.0.tar.gz'\n",
+				"tar xzf nagios-3.*\n",
+				"cd nagios/\n",
+				"./configure --prefix=/usr/local/nagios --with-command-group=nagcmd --enable-nanosleep --enable-event-broker\n",
+				"make all\n",
+				"make install\n",
+				"make install-init\n",
+				"make install-commandmode\n",
+				"make install-config\n",
+				"make install-webconf\n",
+				"htpasswd -b -c /usr/local/nagios/etc/htpasswd.users nagiosadmin admin\n",
+				"ln -s /etc/init.d/nagios /etc/rcS.d/S99nagios\n",
+				"rm -rf /nagios\n",
+				"rm -rf /nagios-3*\n",
+				"cd /; wget 'https://www.nagios-plugins.org/download/nagios-plugins-1.5.tar.gz'\n",
+				"tar xzf nagios-plugins-*\n",
+				"cd nagios-plugins-*\n",
+				"./configure --with-nagios-user=nagios --with-nagios-group=nagios --with-openssl=/usr/bin/openssl\n",
+				"make\n",
+				"make install\n",
+				"rm -rf /nagios-plugins*\n",
+				"cd /usr/local/nagios/libexec/; git clone git://github.com/mzupan/nagios-plugin-mongodb.git\n",
+				"cd /opt\n",
+				"git clone https://github.com/Crapworks/RESTlos.git\n",			
+				"cp /opt/RESTlos/contrib/restlos.wsgi /opt/RESTlos/\n",
+				"echo 'WSGIScriptAlias /restlos /opt/RESTlos/restlos.wsgi' >> /etc/apache2/conf.d/restlos.conf\n",
+				"echo 'WSGIDaemonProcess restlos user=nagios group=nagios threads=5' >> /etc/apache2/conf.d/restlos.conf\n",
+				"echo '<Directory /opt/RESTlos>' >> /etc/apache2/conf.d/restlos.conf\n",
+				"echo 'WSGIProcessGroup restlos' >> /etc/apache2/conf.d/restlos.conf\n",
+				"echo 'WSGIApplicationGroup %{GLOBAL}' >> /etc/apache2/conf.d/restlos.conf\n",
+				"echo 'WSGIPassAuthorization On' >> /etc/apache2/conf.d/restlos.conf\n",
+				"echo 'Order deny,allow' >> /etc/apache2/conf.d/restlos.conf\n",
+				"echo 'Allow from all' >> /etc/apache2/conf.d/restlos.conf\n",
+				"echo '</Directory>' >> /etc/apache2/conf.d/restlos.conf\n",
+				"cd /opt/RESTlos/; wget https://s3.amazonaws.com/{$someplace}/config.json\n",			
+				"cd /usr/local/nagios/etc/; rm nagios.cfg; wget 'https://s3.amazonaws.com/{$someplace}/nagios.cfg'; chown nagios:nagios nagios.cfg\n",			
+				"rm /usr/local/nagios/etc/objects/localhost.cfg; rm /usr/local/nagios/etc/objects/commands.cfg; rm /usr/local/nagios/etc/objects/windows.cfg; rm /usr/local/nagios/etc/objects/switch.cfg; rm /usr/local/nagios/etc/objects/printer.cfg; rm /usr/local/nagios/etc/objects/templates.cfg\n",
+				"echo '[default]' > ~/.s3cfg;\n",
+				"echo 'access_key = AWSKEY' >> ~/.s3cfg\n",
+				"echo 'secret_key = SECRETKEY' >> ~/.s3cfg;\n",
+				"echo 'socket_timeout = 100' >> ~/.s3cfg;\n",
+				"export AWS_CREDENTIAL_FILE=~/.s3cfg;\n",
+				"mkdir /usr/local/nagios/etc/objects/common\n",
+				"s3cmd -c ~/.s3cfg sync s3://{$someplace}/common/ /usr/local/nagios/etc/objects/common/\n",
+				"s3cmd -c ~/.s3cfg sync s3://{$someplace}/libexec/ /usr/local/nagios/libexec/\n",
+				"echo '* * * * * s3cmd -c /etc/s3cmd.config sync sync --add-header=x-amz-acl:authenticated-read -M put /usr/local/nagios/etc/objects/hosts/ s3://{$someplace}/config/nagios/' | crontab -\n",
+				"echo '* * * * * s3cmd -c ~/.s3cfg sync s3://{$someplace}/common/ /usr/local/nagios/etc/objects/common/' | crontab -\n",					
+				"cd /tmp; wget 'http://www.mathias-kettner.de/download/mk-livestatus-1.2.0p3.tar.gz'\n",
+				"tar xfz mk-livestatus-1.2.0p3.tar.gz\n",
+				"cd mk-livestatus-*/\n",
+				"./configure\n",
+				"make\n",
+				"make install\n",
+				"echo 'service livestatus' >> /etc/xinetd.d/livestatus\n",
+				"echo '{' >> /etc/xinetd.d/livestatus\n",
+				"echo 'type            = UNLISTED' >> /etc/xinetd.d/livestatus\n",
+				"echo 'port            = 6557' >> /etc/xinetd.d/livestatus\n",
+				"echo 'socket_type     = stream' >> /etc/xinetd.d/livestatus\n",
+				"echo 'protocol        = tcp' >> /etc/xinetd.d/livestatus\n",
+				"echo 'wait            = no' >> /etc/xinetd.d/livestatus\n",
+				"echo 'cps             = 100 3' >> /etc/xinetd.d/livestatus\n",
+				"echo 'instances       = 500' >> /etc/xinetd.d/livestatus\n",
+				"echo 'per_source      = 250' >> /etc/xinetd.d/livestatus\n",
+				"echo 'flags           = NODELAY' >> /etc/xinetd.d/livestatus\n",
+				"echo 'user            = nagios' >> /etc/xinetd.d/livestatus\n",
+				"echo 'server          = /usr/local/bin/unixcat' >> /etc/xinetd.d/livestatus\n",
+				"echo 'server_args     = /usr/local/nagios/var/rw/live' >> /etc/xinetd.d/livestatus\n",
+				"echo 'disable         = no' >> /etc/xinetd.d/livestatus\n",
+				"echo '}' >> /etc/xinetd.d/livestatus\n",
+				"service xinetd restart\n",
+				"service nagios restart\n",
+				"service apache2 restart\n",
+				"echo 'smtp_generic_maps = hash:/etc/postfix/generic' >> /etc/postfix/main.cf\n",
+				"echo 'nagios@demoserver.net nagiosalerts@demoserver.com' > /etc/postfix/generic\n",
+				"postmap /etc/postfix/generic\n",
+				"service postfix restart\n",
+				"service nagios reload\n",
+				"service iwatch restart\n",					
+				"sed -i '$icurl -X POST -d @/etc/host-monitor -H \"content-type: application/json\" http://admin:password@localhost/restlos/host?host_name=new' /etc/rc.local\n",			
+				"cd /etc/; wget https://s3.amazonaws.com/{$someplace}/host-monitor\n",
+				"HG=(" ,{ "Ref" : "InstanceHostType" } ,"); sed -i \"s/HOSTGROUPS/$HG/g\" /etc/host-monitor\n",
+				"HOST=$(hostname); sed -i \"s/HOSTNAME/$HOST/g\" /etc/host-monitor\n",
+				"curl -X POST -d @/etc/host-monitor -H \"content-type: application/json\" http://admin:password@localhost/restlos/host?host_name=new\n",
+				"echo -e '#!/bin/bash' > /etc/rc0.d/K99host-monitor\n",			
+				"echo -e 'curl -X DELETE -H \"content-type: application/json\" http://admin:password@localhost/restlos/host?host_name=HOSTNAME' >> /etc/rc0.d/K99host-monitor\n",			
+				"chmod +x /etc/rc0.d/K99host-monitor\n",
+				"HOST=$(hostname); sed -i \"s/HOSTNAME/$HOST/g\" /etc/rc0.d/K99host-monitor\n"					
+				]] } }
+		   }
+		},
+		"NagiosServerScaleUpPolicy" : {
+		  "Type" : "AWS::AutoScaling::ScalingPolicy",
+		  "Properties" : {
+			"AdjustmentType" : "ChangeInCapacity",
+			"AutoScalingGroupName" : { "Ref" : "MonitoringASG" },
+			"Cooldown" : "600",
+			"ScalingAdjustment" : "1"
+		  }
+		},
+		"NagiosServerScaleDownPolicy" : {
+		  "Type" : "AWS::AutoScaling::ScalingPolicy",
+		  "Properties" : {
+			"AdjustmentType" : "ChangeInCapacity",
+			"AutoScalingGroupName" : { "Ref" : "MonitoringASG" },
+			"Cooldown" : "600",
+			"ScalingAdjustment" : "-1"
+		  }
+		},
+		"CPUAlarmHigh": {
+		 "Type": "AWS::CloudWatch::Alarm",
+		 "Properties": {
+			"AlarmDescription": "Scale-up if CPU > 75% for 4 minutes",
+			"MetricName": "CPUUtilization",
+			"Namespace": "AWS/EC2",
+			"Statistic": "Average",
+			"Period": "60",
+			"EvaluationPeriods": "10",
+			"Threshold": "75",
+			"AlarmActions": [ { "Ref": "NagiosServerScaleUpPolicy" } ],
+			"Dimensions": [
+			  {
+				"Name": "AutoScalingGroupName",
+				"Value": { "Ref": "MonitoringASG" }
+			  }
+			],
+			"ComparisonOperator": "GreaterThanThreshold"
+		  }
+		},
+		"CPUAlarmLow": {
+		 "Type": "AWS::CloudWatch::Alarm",
+		 "Properties": {
+			"AlarmDescription": "Scale-down if CPU < 70% for 5 minutes",
+			"MetricName": "CPUUtilization",
+			"Namespace": "AWS/EC2",
+			"Statistic": "Average",
+			"Period": "60",
+			"EvaluationPeriods": "3",
+			"Threshold": "30",
+			"AlarmActions": [ { "Ref": "NagiosServerScaleDownPolicy" } ],
+			"Dimensions": [
+			  {
+				"Name": "AutoScalingGroupName",
+				"Value": { "Ref": "MonitoringASG" }
+			  }
+			],
+			"ComparisonOperator": "LessThanThreshold"
+		  }
+		}	
+	}
+}

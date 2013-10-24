@@ -1,0 +1,387 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+ 
+  "Description" : "East Environment for CSP Tenant. Contains 1 VPC with 3 subnets (1 public and 2 private). 2 NAT instances for HA purposes and Openswan for IPSec communication with West side. In the first private subnet holds 2 AD Servers for DNS and login. In the second one Splunk infrastructure including 1 web and 1 indexer.",
+
+  "Parameters" : {
+
+    "KeyName" : {
+      "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instances",
+      "Type" : "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern" : "[-_ a-zA-Z0-9]*",
+      "Default" : "east_preprd",
+      "ConstraintDescription" : "can contain only alphanumeric characters, spaces, dashes and underscores."
+    },
+	"VPC" : {
+      "Description" : "Name of the VPN Instance #1",
+      "Type" : "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "Default" : "vpc-123456",
+      "ConstraintDescription" : "can contain only alphanumeric characters."
+    },	
+	"VPCSecurityGroup" : {
+	  "Description" : "ID of the VPC Security Group",
+	  "Type" : "String",
+	  "MinLength": "1",
+	  "MaxLength": "16",
+	  "Default" : "sg-a12bf8ce",
+	  "ConstraintDescription" : "can contain only alphanumeric characters."
+	},	
+	"VPNVMName1" : {
+      "Description" : "Name of the VPN Instance #1",
+      "Type" : "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern" : "[a-z0-9]*",
+      "Default" : "pre1opsvanat001",
+      "ConstraintDescription" : "can contain only alphanumeric characters."
+    },
+	"VPNVMName2" : {
+      "Description" : "Name of the VPN Instance #2",
+      "Type" : "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern" : "[a-z0-9]*",
+      "Default" : "pre1opsvanat002",
+      "ConstraintDescription" : "can contain only alphanumeric characters."
+    },
+	"BastionVMName1" : {
+      "Description" : "Name of the Monitoring Instance",
+      "Type" : "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern" : "[a-z0-9]*",
+      "Default" : "pre1opsvabst001",
+      "ConstraintDescription" : "can contain only alphanumeric characters."
+    },				
+    "VPNInstanceType" : {
+      "Description" : "Instance type for software VPN instance.",
+      "Type" : "String",
+      "Default" : "m1.small"
+    },	
+	"VPNInstanceIP" : {
+      "Description" : "IP address for this backend web server.",
+      "Type" : "String",
+      "Default" : "172.18.0.251"
+    },	
+	"VPNInstanceIP2" : {
+      "Description" : "IP address for this backend web server.",
+      "Type" : "String",
+      "Default" : "172.18.0.251"
+    },
+	"VPNInstanceIP1" : {
+      "Description" : "IP address for this backend web server.",
+      "Type" : "String",
+      "Default" : "172.18.0.250"
+    },
+    "VPCCidr" : {
+      "Description" : "CIDR address of the remote VPC we are connecting to.",
+      "Type" : "String",
+      "Default" : "172.19.0.0/16"
+    },
+    "VPNEIPAlloc" : {
+      "Description" : "EIP Address.",
+      "Type" : "String",
+      "Default" : "54.234.234.234"
+    },	
+    "VPNEni" : {
+      "Description" : "Elastic Network Interface",
+      "Type" : "String",
+      "Default" : "eni-123qwe123"
+    },		
+    "VPNInstanceEIP" : {
+      "Description" : "CIDR address of the remote VPC we are connecting to.",
+      "Type" : "String",
+      "Default" : "123.123.123.123"
+    },		
+    "RemoteVPCcidr" : {
+      "Description" : "CIDR address of the remote VPC we are connecting to.",
+      "Type" : "String",
+      "Default" : "172.19.0.0/16"
+    },
+    "RemoteCIDRmask" : {
+      "Description" : "CIDR address netmask of the remote VPC we are connecting to.",
+      "Type" : "String",
+      "Default" : "255.255.0.0"
+    },
+	"RemoteVPNIPCidr" : {
+      "Description" : "IP address of the remote VPN endpoint for creating the appropriate security group rules.",
+      "Type" : "String",
+      "Default" : "234.234.234.234/32"
+    },
+    "RemoteVPNIP" : {
+      "Description" : "IP address of the remote VPN endpoint for creating the appropriate security group rules.",
+      "Type" : "String",
+      "Default" : "234.234.234.234"
+    },
+	"InstanceHostType" : {
+      "Description" : "Key for VPN Auth",
+      "Type" : "String",
+      "Default" : "duvuwrApeXe9e42tHEthestEThUFebr4thEprubr8dresPestuvacHes7uStaPHu"
+    },	
+	"MonitInstanceIP" : {
+      "Description" : "IP address for this backend web server.",
+      "Type" : "String",
+      "Default" : "172.18.0.252"
+    },		
+	"VPNKey" : {
+      "Description" : "Key for VPN Auth",
+      "Type" : "String",
+      "Default" : "duvuwrApeXe9e42tHEthestEThUFebr4tgfrtyudresPestuvacHes7uStaPHu"
+    },
+	"PublicSubnet" : {
+	  "Description" : "ID of the Public Subnet",
+	  "Type" : "String",
+	  "MinLength": "1",
+	  "MaxLength": "16",
+	  "Default" : "subnet-c52d10aa",
+	  "ConstraintDescription" : "can contain only alphanumeric characters."
+	}
+	
+  },
+  
+  "Mappings" : {
+    "AWSInstanceType2Arch" : {
+      "t1.micro"    : { "Arch" : "64" },
+      "m1.small"    : { "Arch" : "64" },
+      "m1.medium"   : { "Arch" : "64" },	  
+      "m1.large"    : { "Arch" : "64" },
+      "m1.xlarge"   : { "Arch" : "64" },
+      "m2.xlarge"   : { "Arch" : "64" },
+      "m2.2xlarge"  : { "Arch" : "64" },
+      "m2.4xlarge"  : { "Arch" : "64" },
+      "c1.medium"   : { "Arch" : "64" },
+      "c1.xlarge"   : { "Arch" : "64" },
+      "cc1.4xlarge" : { "Arch" : "64Cluster" },
+      "cc2.8xlarge" : { "Arch" : "64Cluster" },
+      "cg1.4xlarge" : { "Arch" : "64GPU" }
+    },
+
+    "AWSRegionArch2AMI" : {
+      "us-east-1"      : { "32" : "ami-a0cd60c9", "64" : "ami-41482a28", "64Cluster" : "ami-a8cd60c1", "64GPU" : "NOT_YET_SUPPORTED"},
+      "us-west-2"      : { "32" : "ami-46da5576", "64" : "ami-d9df49e9", "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED"},      
+      "us-west-1"      : { "32" : "ami-61555115", "64" : "ami-36b89273", "64Cluster" : "ami-67555113",      "64GPU" : "NOT_YET_SUPPORTED" }
+    },
+	
+    "AWSInstanceType2Ubuntu" : {
+      "t1.micro"    : { "Arch" : "64" },
+      "m1.small"    : { "Arch" : "64" },
+      "m1.medium"   : { "Arch" : "64" },	  
+      "m1.large"    : { "Arch" : "64" },
+      "m1.xlarge"   : { "Arch" : "64" },
+      "m2.xlarge"   : { "Arch" : "64" },
+      "m2.2xlarge"  : { "Arch" : "64" },
+      "m2.4xlarge"  : { "Arch" : "64" },
+      "c1.medium"   : { "Arch" : "64" },
+      "c1.xlarge"   : { "Arch" : "64" },
+      "cc1.4xlarge" : { "Arch" : "64Cluster" },
+      "cc2.8xlarge" : { "Arch" : "64Cluster" },
+      "cg1.4xlarge" : { "Arch" : "64GPU" }
+    },
+
+    "AWSRegionUbuntu2AMI" : {
+      "us-east-1"      : { "32" : "ami-a0cd60c9", "64" : "ami-3fec7956" , "64Cluster" : "ami-a8cd60c1", "64GPU" : "NOT_YET_SUPPORTED"},
+      "us-west-2"      : { "32" : "ami-46da5576", "64" : "ami-4ac9437a" , "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED"},
+      "us-west-1"      : { "32" : "ami-7d4c6938", "64" : "ami-734c6936", "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED" },
+      "eu-west-1"      : { "32" : "ami-61555115", "64" : "ami-6d555119", "64Cluster" : "ami-67555113",      "64GPU" : "NOT_YET_SUPPORTED" }
+    },
+  
+     "AWSInstanceType2Win" : {
+      "t1.micro"    : { "Arch" : "64" },
+      "m1.small"    : { "Arch" : "64" },
+      "m1.medium"   : { "Arch" : "64" },	  
+      "m1.large"    : { "Arch" : "64" },
+      "m1.xlarge"   : { "Arch" : "64" },
+      "m2.xlarge"   : { "Arch" : "64" },
+      "m2.2xlarge"  : { "Arch" : "64" },
+      "m2.4xlarge"  : { "Arch" : "64" },
+      "c1.medium"   : { "Arch" : "64" },
+      "c1.xlarge"   : { "Arch" : "64" },
+      "cc1.4xlarge" : { "Arch" : "64Cluster" },
+      "cc2.8xlarge" : { "Arch" : "64Cluster" },
+      "cg1.4xlarge" : { "Arch" : "64GPU" }
+    },
+
+    "AWSRegionWin2AMI" : {
+      "us-east-1"      : { "32" : "ami-a0cd60c9", "64" : "ami-b5bcd2dc" , "64Cluster" : "ami-a8cd60c1", "64GPU" : "NOT_YET_SUPPORTED"},
+      "us-west-2"      : { "32" : "ami-46da5576", "64" : "ami-9f0d9baf" , "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED"},
+      "us-west-1"      : { "32" : "ami-7d4c6938", "64" : "ami-734c6936", "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED" }
+    }	
+  },
+  
+  "Resources" : {
+    	
+
+    "VPNInstance" : {
+      "Type" : "AWS::EC2::Instance",
+      "Metadata" : {
+        "Comment1" : "Configure the VPN instance to connect to another VPC"
+      },
+      "Properties" : {
+        "InstanceType" : { "Ref" : "VPNInstanceType" } ,
+		"SubnetId": { "Ref" : "PublicSubnet" },
+		"PrivateIpAddress" : { "Ref" : "VPNInstanceIP1" },
+        "SecurityGroupIds" : [{ "Ref" : "VPCSecurityGroup" }],
+        "KeyName" : { "Ref" : "KeyName" },        		
+        "SourceDestCheck" : "false",		
+        "ImageId"        : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "VPNInstanceType" }, "Arch" ] } ] },
+        "Tags" : [
+          { "Key" : "Name", "Value" : { "Ref" : "VPNVMName1" } }
+        ],
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+			"#!/bin/bash -v\n",
+			"# Change sysctl\n",
+			"echo 'net.ipv4.ip_forward=1\n' >> /etc/sysctl.conf\n",
+			"echo 'net.ipv4.conf.all.accept_redirects =0'\n >> /etc/sysctl.conf\n",
+			"echo 'net.ipv4.conf.all.send_redirects =0'\n >> /etc/sysctl.conf\n",
+			"echo 'net.ipv4.conf.default.send_redirects=0'\n >> /etc/sysctl.conf\n",
+			"echo 'net.ipv4.conf.eth0.send_redirects=0'\n >> /etc/sysctl.conf\n",
+			"echo 'net.ipv4.conf.default.accept_redirects=0'\n >> /etc/sysctl.conf\n",
+			"echo 'net.ipv4.conf.eth0.accept_redirects=0'\n >> /etc/sysctl.conf\n",
+			"sysctl -p\n",
+			"#Execute Iptables for NAT and internal routing\n",
+
+			"echo '/sbin/iptables -t nat -A POSTROUTING -o eth1 -s ", 
+			{ "Ref" : "VPCCidr" }, 
+			" -d ",
+			{ "Ref" : "RemoteVPCcidr" },
+			" -j ACCEPT' >> /etc/rc.local\n",
+			"echo '/sbin/iptables -t nat -A POSTROUTING -o eth1 -s ",
+			{ "Ref" : "VPCCidr" },
+			" -j MASQUERADE' >> /etc/rc.local\n",
+
+			"echo '#!/bin/bash\n route del default eth0' > /sbin/ifup-local\n",
+			"echo ' service ipsec reload' >> /sbin/ifup-local\n",	 
+			"chmod +x /sbin/ifup-local\n",
+			"/sbin/ifup-local\n",	  
+			"# Install packages needed for IPSec connection and configure\n",
+			"echo 'version 2.0\n' > /etc/ipsec.conf\n",
+			"echo 'config setup\n' >> /etc/ipsec.conf\n",
+			"echo -e '\tnat_traversal=yes\n' >> /etc/ipsec.conf\n",
+			"echo -e '\toe=off\n' >> /etc/ipsec.conf\n",
+			"echo -e '\tprotostack=netkey\n' >> /etc/ipsec.conf\n",
+			"echo 'include /etc/ipsec.d/*.conf' >> /etc/ipsec.conf\n",
+			"# Configuration for specific link between sites\n",	  
+			"echo 'conn eastwest' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tauthby=secret' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tauto=start' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\ttype=tunnel' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tforceencaps=yes' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tphase2alg=aes256-sha1;modp2048' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tphase2=esp' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tike=aes256-sha1;modp2048' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tleft=" , { "Ref" : "VPNInstanceIP" }, "' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tleftid=" , { "Ref" : "VPNInstanceEIP" }, "' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tright=" , { "Ref" : "RemoteVPNIP" }, "' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\tleftsubnet=" , { "Ref" : "VPCCidr" }, "' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '\trightsubnet=" , { "Ref" : "RemoteVPCcidr" },"' >> /etc/ipsec.d/vpn.conf\n",
+			"echo -e '" , { "Ref" : "VPNInstanceEIP" }, " " , { "Ref" : "RemoteVPNIP" }, ": PSK \"" , { "Ref" : "VPNKey" }, "\"' >> /etc/ipsec.secrets\n",
+			"echo -e '" , { "Ref" : "RemoteVPNIP" }, " " , { "Ref" : "VPNInstanceEIP" }, ": PSK \"" , { "Ref" : "VPNKey" }, "\"' >> /etc/ipsec.secrets\n",	  
+			"chkconfig ipsec on\n",
+			"service ipsec start\n",
+			"yum install -y net-snmp.x86_64 nrpe\n",
+			"cd /etc/snmp/; rm snmpd.conf -f; wget https://s3.amazonaws.com/{$someplace}/snmpd.conf; service snmpd restart\n",
+			"cd /etc/; wget https://s3.amazonaws.com/{$someplace}/host-monitor\n",
+			"HG=(" ,{ "Ref" : "InstanceHostType" } ,"); sed -i \"s/HOSTGROUPS/$HG/g\" /etc/host-monitor\n",
+			"HOST=$(hostname); sed -i \"s/HOSTNAME/$HOST/g\" /etc/host-monitor\n"
+        ]]}}
+      }
+    },
+
+    "VPNInstance2" : {
+      "Type" : "AWS::EC2::Instance",
+      "Metadata" : {
+        "Comment1" : "Configure the VPN instance to connect to another VPC"
+      },
+      "Properties" : {
+        "InstanceType" : { "Ref" : "VPNInstanceType" } ,
+        "KeyName" : { "Ref" : "KeyName" },
+        "SubnetId" : { "Ref" : "PublicSubnet" },
+		"PrivateIpAddress" : { "Ref" : "VPNInstanceIP2" },		
+        "SourceDestCheck" : "false",
+        "ImageId"        : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "VPNInstanceType" }, "Arch" ] } ] },		
+        "SecurityGroupIds" : [{ "Ref" : "VPCSecurityGroup" }],
+        "Tags" : [
+          { "Key" : "Name", "Value" : { "Ref" : "VPNVMName2" } }
+        ],
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#!/bin/bash -v\n",
+		  "# Change sysctl\n",
+		  "echo 'net.ipv4.ip_forward=1\n' >> /etc/sysctl.conf\n",
+		  "echo 'net.ipv4.conf.all.accept_redirects =0'\n >> /etc/sysctl.conf\n",
+		  "echo 'net.ipv4.conf.all.send_redirects =0'\n >> /etc/sysctl.conf\n",
+		  "echo 'net.ipv4.conf.default.send_redirects=0'\n >> /etc/sysctl.conf\n",
+		  "echo 'net.ipv4.conf.eth0.send_redirects=0'\n >> /etc/sysctl.conf\n",
+		  "echo 'net.ipv4.conf.default.accept_redirects=0'\n >> /etc/sysctl.conf\n",
+		  "echo 'net.ipv4.conf.eth0.accept_redirects=0'\n >> /etc/sysctl.conf\n",
+		  "sysctl -p\n",
+		  "#Execute Iptables for NAT and internal routing\n",
+
+		  "echo '/sbin/iptables -t nat -A POSTROUTING -o eth1 -s ", 
+		  { "Ref" : "VPCCidr" }, 
+		  " -d ",
+		  { "Ref" : "RemoteVPCcidr" },
+		  " -j ACCEPT' >> /etc/rc.local\n",
+		  "echo '/sbin/iptables -t nat -A POSTROUTING -o eth1 -s ",
+		  { "Ref" : "VPCCidr" },
+		  " -j MASQUERADE' >> /etc/rc.local\n",
+		  
+		  "echo '#!/bin/bash\n route del default eth0' > /sbin/ifup-local\n",
+		  "echo ' service ipsec reload' >> /sbin/ifup-local\n",	 
+		  "chmod +x /sbin/ifup-local\n",
+		  "/sbin/ifup-local\n",	  
+		  "# Install packages needed for IPSec connection and configure\n",
+		  "echo 'version 2.0\n' > /etc/ipsec.conf\n",
+		  "echo 'config setup\n' >> /etc/ipsec.conf\n",
+		  "echo -e '\tnat_traversal=yes\n' >> /etc/ipsec.conf\n",
+		  "echo -e '\toe=off\n' >> /etc/ipsec.conf\n",
+		  "echo -e '\tprotostack=netkey\n' >> /etc/ipsec.conf\n",
+		  "echo 'include /etc/ipsec.d/*.conf' >> /etc/ipsec.conf\n",
+		  "# Configuration for specific link between sites\n",	  
+		  "echo 'conn eastwest' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tauthby=secret' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tauto=start' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\ttype=tunnel' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tforceencaps=yes' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tphase2alg=aes256-sha1;modp2048' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tphase2=esp' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tike=aes256-sha1;modp2048' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tleft=" , { "Ref" : "VPNInstanceIP" }, "' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tleftid=" , { "Ref" : "VPNInstanceEIP" }, "' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tright=" , { "Ref" : "RemoteVPNIP" }, "' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\tleftsubnet=" , { "Ref" : "VPCCidr" }, "' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '\trightsubnet=" , { "Ref" : "RemoteVPCcidr" },"' >> /etc/ipsec.d/vpn.conf\n",
+		  "echo -e '" , { "Ref" : "VPNInstanceEIP" }, " " , { "Ref" : "RemoteVPNIP" }, ": PSK \"" , { "Ref" : "VPNKey" }, "\"' >> /etc/ipsec.secrets\n",
+		  "echo -e '" , { "Ref" : "RemoteVPNIP" }, " " , { "Ref" : "VPNInstanceEIP" }, ": PSK \"" , { "Ref" : "VPNKey" }, "\"' >> /etc/ipsec.secrets\n",	  
+		  "chkconfig ipsec on\n",
+		  "service ipsec start\n"
+        ]]}}
+      }
+    },
+	"NetworkInterfaceAttachment" : {
+		"Type" : "AWS::EC2::NetworkInterfaceAttachment",
+        "Properties" : {
+            "InstanceId" : {"Ref" : "VPNInstance"},
+            "NetworkInterfaceId" : {"Ref" : "VPNEni"},
+            "DeviceIndex" : "1" 
+        }
+	},
+    "NetworkInterfaceEIPAssoc" : {
+      "Type" : "AWS::EC2::EIPAssociation",
+      "Properties" : {
+        "AllocationId" : { "Ref" : "VPNEIPAlloc" },
+        "NetworkInterfaceId" : { "Ref" : "VPNEni" }
+		}
+	},
+	"VPCSecurityGroupIngressVPNLayer" : {
+		"Type" : "AWS::EC2::SecurityGroupIngress",
+		"Properties" : {
+			"GroupId" : { "Ref" : "VPCSecurityGroup" },			
+			"IpProtocol" : "-1", "FromPort" : "0",  "ToPort" : "65535",  "CidrIp" : { "Ref" : "RemoteVPNIPCidr" }
+		}
+	}		
+ }
+}

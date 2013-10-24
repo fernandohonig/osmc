@@ -1,0 +1,212 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+ 
+  "Description" : "East Environment for CSP Tenant. Contains 1 VPC with 3 subnets (1 public and 2 private). 2 NAT instances for HA purposes and Openswan for IPSec communication with West side. In the first private subnet holds 2 AD Servers for DNS and login. In the second one Splunk infrastructure including 1 web and 1 indexer.",
+
+  "Parameters" : {
+
+    "PublicSubnetRange" : {
+      "Description" : "Local Public Subnet range to be created in the VPC.",
+      "Type" : "String",
+      "Default" : "172.18.0.0/24"
+    },
+    "NATIntIP" : {
+      "Description" : "Remote Public Subnet range to be created in the VPC.",
+      "Type" : "String",
+      "Default" : "172.18.0.0/24"
+    },
+    "DomainName" : {
+      "Description" : "Internal Domain to be created in the VPC.",
+      "Type" : "String",
+      "Default" : "us-east-1.compute.internal"
+    },	
+    "VPCCidr" : {
+      "Description" : "Subnet range to be created in the VPC.",
+      "Type" : "String",
+      "Default" : "172.18.0.0/24"
+    }	
+  },
+  
+  "Mappings" : {
+    "AWSInstanceType2Arch" : {
+      "t1.micro"    : { "Arch" : "64" },
+      "m1.small"    : { "Arch" : "64" },
+      "m1.medium"   : { "Arch" : "64" },	  
+      "m1.large"    : { "Arch" : "64" },
+      "m1.xlarge"   : { "Arch" : "64" },
+      "m2.xlarge"   : { "Arch" : "64" },
+      "m2.2xlarge"  : { "Arch" : "64" },
+      "m2.4xlarge"  : { "Arch" : "64" },
+      "c1.medium"   : { "Arch" : "64" },
+      "c1.xlarge"   : { "Arch" : "64" },
+      "cc1.4xlarge" : { "Arch" : "64Cluster" },
+      "cc2.8xlarge" : { "Arch" : "64Cluster" },
+      "cg1.4xlarge" : { "Arch" : "64GPU" }
+    },
+
+    "AWSRegionArch2AMI" : {
+      "us-east-1"      : { "32" : "ami-a0cd60c9", "64" : "ami-41482a28", "64Cluster" : "ami-a8cd60c1", "64GPU" : "NOT_YET_SUPPORTED"},
+      "us-west-2"      : { "32" : "ami-46da5576", "64" : "ami-d9df49e9", "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED"},      
+      "eu-west-1"      : { "32" : "ami-61555115", "64" : "ami-6d555119", "64Cluster" : "ami-67555113",      "64GPU" : "NOT_YET_SUPPORTED" }
+    },
+	
+    "AWSInstanceType2Ubuntu" : {
+      "t1.micro"    : { "Arch" : "64" },
+      "m1.small"    : { "Arch" : "64" },
+      "m1.medium"   : { "Arch" : "64" },	  
+      "m1.large"    : { "Arch" : "64" },
+      "m1.xlarge"   : { "Arch" : "64" },
+      "m2.xlarge"   : { "Arch" : "64" },
+      "m2.2xlarge"  : { "Arch" : "64" },
+      "m2.4xlarge"  : { "Arch" : "64" },
+      "c1.medium"   : { "Arch" : "64" },
+      "c1.xlarge"   : { "Arch" : "64" },
+      "cc1.4xlarge" : { "Arch" : "64Cluster" },
+      "cc2.8xlarge" : { "Arch" : "64Cluster" },
+      "cg1.4xlarge" : { "Arch" : "64GPU" }
+    },
+
+    "AWSRegionUbuntu2AMI" : {
+      "us-east-1"      : { "32" : "ami-a0cd60c9", "64" : "ami-3fec7956" , "64Cluster" : "ami-a8cd60c1", "64GPU" : "NOT_YET_SUPPORTED"},
+      "us-west-2"      : { "32" : "ami-46da5576", "64" : "ami-4ac9437a" , "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED"},
+      "us-west-1"      : { "32" : "ami-7d4c6938", "64" : "ami-734c6936", "64Cluster" : "NOT_YET_SUPPORTED", "64GPU" : "NOT_YET_SUPPORTED" },
+      "eu-west-1"      : { "32" : "ami-61555115", "64" : "ami-6d555119", "64Cluster" : "ami-67555113",      "64GPU" : "NOT_YET_SUPPORTED" }
+    },
+  
+     "AWSInstanceType2Win" : {
+      "t1.micro"    : { "Arch" : "64" },
+      "m1.small"    : { "Arch" : "64" },
+      "m1.medium"   : { "Arch" : "64" },	  
+      "m1.large"    : { "Arch" : "64" },
+      "m1.xlarge"   : { "Arch" : "64" },
+      "m2.xlarge"   : { "Arch" : "64" },
+      "m2.2xlarge"  : { "Arch" : "64" },
+      "m2.4xlarge"  : { "Arch" : "64" },
+      "c1.medium"   : { "Arch" : "64" },
+      "c1.xlarge"   : { "Arch" : "64" },
+      "cc1.4xlarge" : { "Arch" : "64Cluster" },
+      "cc2.8xlarge" : { "Arch" : "64Cluster" },
+      "cg1.4xlarge" : { "Arch" : "64GPU" }
+    } 
+  },
+  
+  "Resources" : {
+
+    "VPC" : {
+      "Type" : "AWS::EC2::VPC",
+      "Properties" : {
+        "CidrBlock" : { "Ref" : "VPCCidr" },
+    	"EnableDnsSupport" : "true",
+    	"EnableDnsHostnames" : "true",		
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+	"VPCDHCPOptions" : {
+         "Type" : "AWS::EC2::DHCPOptions",
+         "Properties" : {
+            "DomainName" : {"Ref" : "DomainName"},
+            "DomainNameServers" : [ "AmazonProvidedDNS" ]
+        }
+    },
+    "VPCDHCPOptionsAsoc" : {
+         "Type" : "AWS::EC2::VPCDHCPOptionsAssociation",
+         "Properties" : {
+             "VpcId" : {"Ref" : "VPC"},
+             "DhcpOptionsId" : {"Ref" : "VPCDHCPOptions"}
+        }
+    },	
+    "PublicSubnet" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "CidrBlock" : { "Ref" : "PublicSubnetRange" },
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+    "EIPAddress" : {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain" : "vpc"
+		}
+    },	
+	"ENI" : {
+      "Type" : "AWS::EC2::NetworkInterface",
+      "Properties" : {        
+		"PrivateIpAddress": { "Ref" : "NATIntIP" },
+		"SourceDestCheck": "false",
+		"SubnetId": { "Ref" : "PublicSubnet" }
+      }
+    },	
+    "InternetGateway" : {
+      "Type" : "AWS::EC2::InternetGateway",
+      "Properties" : {
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+    "GatewayToInternet" : {
+       "Type" : "AWS::EC2::VPCGatewayAttachment",
+       "Properties" : {
+         "VpcId" : { "Ref" : "VPC" },
+         "InternetGatewayId" : { "Ref" : "InternetGateway" }
+       }
+    },
+    "PublicRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "Tags" : [
+          { "Key" : "Application", "Value" : { "Ref" : "AWS::StackName" } },
+          { "Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+	"PublicRoute" : {
+      "Type" : "AWS::EC2::Route",
+      "Properties" : {
+        "RouteTableId" : { "Ref" : "PublicRouteTable" },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "GatewayId" : { "Ref" : "InternetGateway" }
+      }
+    },
+    "PublicSubnetRouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet" },
+        "RouteTableId" : { "Ref" : "PublicRouteTable" }
+      }
+    },
+	
+	"VPCSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable internal access to the VPN device",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [	   
+		   { "IpProtocol" : "tcp", "FromPort" : "22",  "ToPort" : "22",  "CidrIp" : "0.0.0.0/0" },
+		   { "IpProtocol" : "tcp", "FromPort" : "80",  "ToPort" : "80",  "CidrIp" : "0.0.0.0/0" }
+            ],			
+        "SecurityGroupEgress" : [
+           { "IpProtocol" : "-1", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0" } 
+		   ]
+      }
+    },	
+		
+	"VPCSecurityGroupIngressVPNLayer" : {
+		"Type" : "AWS::EC2::SecurityGroupIngress",
+		"Properties" : {
+			"GroupId" : { "Ref" : "VPCSecurityGroup" },			
+			"IpProtocol" : "-1", "FromPort" : "0",  "ToPort" : "65535",  "SourceSecurityGroupId" : { "Ref" : "VPCSecurityGroup" }
+		},
+		"DependsOn" : "VPCSecurityGroup"
+	}	
+ }
+}
